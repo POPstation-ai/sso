@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSOログイン手順（ユーザー向け）</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 1.8em;
+            border-bottom: 2px solid #ccc;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        h2 {
+            font-size: 1.4em;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 8px;
+            margin-top: 40px;
+            margin-bottom: 15px;
+        }
+        h3 {
+            font-size: 1.1em;
+            margin-top: 25px;
+            color: #2c3e50;
+        }
+        ul, ol {
+            margin-bottom: 20px;
+            padding-left: 25px;
+        }
+        li {
+            margin-bottom: 5px;
+        }
+        p {
+            margin-bottom: 15px;
+        }
+        .meta-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+        .meta-info p {
+            margin: 0;
+        }
+        .notice {
+            background-color: #eafaf1;
+            border-left: 4px solid #2ecc71;
+            padding: 12px 15px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        .warning {
+            background-color: #fdf2e9;
+            border-left: 4px solid #e67e22;
+            padding: 12px 15px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>SSOログイン手順（ユーザー向け）</h1>
+    
+    <div class="meta-info">
+        <p><strong>対象:</strong> POPstation を利用する一般ユーザー</p>
+        <p><strong>目的:</strong> 自社の Microsoft アカウントで POPstation にログインする</p>
+    </div>
+
+    <h2>目次</h2>
+    <ul>
+        <li><a href="#section-1">1. SSOログインとは</a></li>
+        <li><a href="#section-2">2. ログイン手順</a></li>
+        <li><a href="#section-3">3. ログアウトと再ログイン</a></li>
+        <li><a href="#section-4">4. 困ったときは</a></li>
+    </ul>
+
+    <h2 id="section-1">1. SSOログインとは</h2>
+    <p>普段業務で使っている Microsoft アカウント（Microsoft 365 のアカウント等）を使って POPstation にログインできる仕組みです。</p>
+    <ul>
+        <li>POPstation 専用のパスワードを覚える必要がありません。</li>
+        <li>既に Microsoft アカウントにログインしていれば、ボタン 1 つで POPstation にもログインできます。</li>
+        <li>多要素認証（MFA）が設定されている場合は、Microsoft アカウントの認証画面でそのまま実施します。</li>
+    </ul>
+
+    <h2 id="section-2">2. ログイン手順</h2>
+    
+    <h3>1. SSOログインURLを開く</h3>
+    <p>POPstation運営事務局から配布された SSO ログイン URL をブラウザで開いてください。URL の形式は以下のようになります:</p>
+    <p><code>https://POPstation.ai/signin?sso=&lt;英数字の文字列&gt;</code></p>
+    
+    <div class="notice">
+        <strong>Tips:</strong> SSO ログイン URL をブラウザのブックマークに登録しておくと毎回のログインが楽になります。
+    </div>
+
+    <h3>2. Microsoftのサインイン画面でログイン</h3>
+    <p>ログイン URL を開くと、自動的に Microsoft のサインイン画面に遷移します。</p>
+    <ol>
+        <li>会社の Microsoft アカウント（メールアドレス）を入力 → 「次へ」</li>
+        <li>パスワードを入力 → 「サインイン」</li>
+        <li>多要素認証が設定されている場合は、画面の指示に従って認証（スマートフォンアプリ承認・SMS コード入力など）</li>
+        <li>「サインインの状態を維持しますか？」と表示された場合はご自身の判断で選択</li>
+    </ol>
+
+    <h3>3. POPstation が表示される</h3>
+    <p>サインインに成功すると、自動的に POPstation のチャット画面に遷移します。これでログイン完了です。</p>
+    
+    <div class="warning">
+        <strong>事前準備:</strong> SSO ログインを利用するには Microsoft アカウントとは別に POPstation 側にもユーザー登録が必要です（管理者が事前に実施）。「Access Denied」と表示される場合は管理者に POPstation 側のユーザー登録を依頼してください。
+    </div>
+
+    <h2 id="section-3">3. ログアウトと再ログイン</h2>
+    
+    <h3>ログアウト</h3>
+    <p>POPstation の画面右上のメニューから「ログアウト」を選択してください。</p>
+
+    <h3>再ログイン</h3>
+    <p>再度ログインする際も、最初に開いた SSO ログイン URL を使ってください。ブックマークしておくと便利です。</p>
+    <p>すでに同じブラウザで Microsoft アカウントにサインイン中の場合は、サインイン画面が表示されずそのまま POPstation が開く場合があります。</p>
+
+    <h2 id="section-4">4. 困ったときは</h2>
+    
+    <h3>Microsoft のサインイン画面で「アカウントを追加できませんでした」と表示される</h3>
+    <p>SSO 連携対象外の Microsoft アカウント（個人用アカウント等）でサインインしようとしている可能性があります。会社の Microsoft アカウントでサインインしてください。</p>
+
+    <h3>サインインしても POPstation に戻ってこない / 「Access Denied」エラーが出る</h3>
+    <p>最も多い原因は<strong>POPstation 側のユーザー登録漏れ</strong>です。</p>
+    <ol>
+        <li>Microsoft 認証は成功しているが POPstation 側に当該メールアドレスのユーザーが未登録 → 管理者に POPstation 側のユーザー登録を依頼</li>
+        <li>ブラウザを完全に閉じて、再度 SSO ログイン URL を開く</li>
+        <li>シークレットウィンドウ（プライベートブラウジング）で SSO ログイン URL を開く</li>
+        <li>それでも解決しない場合は、自社のテナント管理者またはサポート窓口へお問い合わせください</li>
+    </ol>
+    <p>問い合わせの際は、可能であれば以下の情報を添えてください:</p>
+    <ul>
+        <li>エラー画面のスクリーンショット</li>
+        <li>表示されたエラーメッセージ（特に AADSTS で始まる番号があれば原因特定が早まります）</li>
+        <li>利用しているブラウザの種類とバージョン</li>
+    </ul>
+
+    <h3>通常のログイン画面でログインしたい</h3>
+    <p>SSO ログイン URL ではなく、POPstation のトップ URL を開くと通常のログイン画面が表示されます。SSO 利用が必須かどうかは社内ポリシーに従ってください。</p>
+
+    <h3>パスワードを忘れた</h3>
+    <p>SSO ログインでは POPstation 用のパスワードは使用しません。Microsoft アカウントのパスワードを忘れた場合は、社内の IT 管理者にパスワードリセットを依頼してください。</p>
+
+</body>
+</html>
