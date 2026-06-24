@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SSO設定ガイド（管理者向け）</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page">
+    <nav class="doc-nav" aria-label="ドキュメント一覧">
+<a href="index.html">一覧</a>
+<a href="sso-admin-azure-setup-guide.html">現在: SSO設定ガイド（管理者向け）</a>
+<a href="sso-user-login-guide.html">SSOログイン手順（ユーザー向け）</a>
+</nav>
+    <main>
+<h1 id="sso設定ガイド管理者向け">SSO設定ガイド（管理者向け）</h1>
+
+<p><strong>対象</strong>: 自テナント内を管理する権限を持つ管理者（POPstation 内で「管理者」ロールを保有）<br><br>
+<strong>目的</strong>: Azure Entra ID にアプリ登録を作成し、POPstation の SSO 設定画面に接続情報を転記して SSO ログインを有効化する</p>
+
+<blockquote>
+<p><strong>用語</strong>: 「テナント管理者」（POPstation 運営側で全テナントを横断管理する権限）とは異なります。当ガイドの対象は <strong>自テナント内のみを管理する顧客側の管理者</strong> です。</p>
+</blockquote>
+
+<hr>
+
+<h2 id="目次">目次</h2>
+
+<ol>
+<li><a href="#全体の流れ">全体の流れ</a></li>
+<li><a href="#事前準備">事前準備</a></li>
+<li><a href="#step-1-entra-id-テナントidの確認">Step 1: Entra ID テナントIDの確認</a></li>
+<li><a href="#step-2-アプリ登録の作成">Step 2: アプリ登録の作成</a></li>
+<li><a href="#step-3-リダイレクトuriの設定">Step 3: リダイレクトURIの設定</a></li>
+<li><a href="#step-4-client-secret-の発行">Step 4: Client Secret の発行</a></li>
+<li><a href="#step-5-apiアクセス許可の設定">Step 5: APIアクセス許可の設定</a></li>
+<li><a href="#step-6-optional-claims-の設定推奨">Step 6: Optional Claims の設定（推奨）</a></li>
+<li><a href="#step-7-テストユーザーの準備entra-id-側">Step 7: テストユーザーの準備（Entra ID 側）</a></li>
+<li><a href="#step-8-POPstation-sso設定画面への転記有効化">Step 8: POPstation SSO設定画面への転記・有効化</a></li>
+<li><a href="#step-9-POPstation-側でユーザーを事前登録">Step 9: POPstation 側でユーザーを事前登録</a></li>
+<li><a href="#step-10-ssoログインの動作確認">Step 10: SSOログインの動作確認</a></li>
+<li><a href="#運用上の注意">運用上の注意</a></li>
+<li><a href="#トラブルシューティング">トラブルシューティング</a></li>
+</ol>
+
+<hr>
+
+<h2 id="全体の流れ">全体の流れ</h2>
+
+<pre><code>[Azure Entra ID]                        [POPstation]
+  ① テナントID取得
+  ② アプリ登録作成 → Client ID 取得
+  ③ リダイレクトURI設定
+  ④ Client Secret 発行
+  ⑤ API権限設定+管理者同意
+  ⑥ Optional Claims（任意）
+                                   →   ⑦ SSO設定画面に①②④の値を転記
+                                       ⑧ 保存→有効化
+                                       ⑨ POPstation 側でユーザーを事前登録
+                                       ⑩ SSOログインURLでテスト</code></pre>
+
+<p>作業時間目安: 30〜45 分。</p>
+
+<blockquote>
+<p><strong>重要</strong>: SSO は認証（本人確認）のみを Entra ID に委ねます。POPstation 側でユーザーを <strong>事前登録していないと SSO ログイン後にアクセス拒否</strong> となります。Entra ID にユーザーを作るだけでは POPstation を利用できません。</p>
+</blockquote>
+
+<hr>
+
+<h2 id="事前準備">事前準備</h2>
+
+<h3 id="1.-POPstation運営事務局に-sso-機能フラグを有効化してもらう">1. POPstation運営事務局に SSO 機能フラグを有効化してもらう</h3>
+
+<p>POPstation 側で対象テナントの SSO 機能が有効化されていないと、SSO 設定画面（<code>/manage/new/sso-settings</code>）にアクセスできません。POPstation運営事務局に有効化を依頼してください。</p>
+
+<h3 id="2.-必要な権限">2. 必要な権限</h3>
+
+<h4 id="azure-entra-id-側">Azure Entra ID 側</h4>
+
+<p>本手順は <strong>Microsoft Entra ID の組み込みロール</strong> で実施できます。最小権限の原則に従い、以下のいずれかのロールを保有してください。</p>
+
+<table>
+<thead><tr>
+<th>操作対象 Step</th>
+<th>最小権限ロール（推奨）</th>
+<th>代替（より広い権限）</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Step 1: テナント ID 確認</td>
+<td>一般ユーザー（既定で全ユーザー閲覧可）</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Step 2: アプリ登録の作成</td>
+<td><strong>アプリケーション開発者</strong>（Application Developer）</td>
+<td>アプリケーション管理者 / クラウドアプリケーション管理者 / グローバル管理者</td>
+</tr>
+<tr>
+<td>Step 3〜4, 6: アプリ登録の構成・シークレット発行・トークン構成</td>
+<td>当該アプリの <strong>所有者</strong>（Owner）、または <strong>アプリケーション管理者</strong></td>
+<td>クラウドアプリケーション管理者 / グローバル管理者</td>
+</tr>
+<tr>
+<td>Step 5.1: Microsoft Graph 委任アクセス許可の追加</td>
+<td>アプリの所有者、または <strong>アプリケーション管理者</strong></td>
+<td>クラウドアプリケーション管理者 / グローバル管理者</td>
+</tr>
+<tr>
+<td>Step 5.2: 管理者の同意付与（テナント全体）</td>
+<td><strong>クラウドアプリケーション管理者</strong>（Cloud Application Administrator）</td>
+<td>アプリケーション管理者 / 特権ロール管理者 / グローバル管理者</td>
+</tr>
+<tr>
+<td>Step 7: テストユーザー作成</td>
+<td><strong>ユーザー管理者</strong>（User Administrator）</td>
+<td>グローバル管理者</td>
+</tr>
+</tbody></table>
+
+<blockquote>
+<p><strong>要点</strong>:</p>
+
+<ul>
+<li>当ガイドで要求する API 権限は Microsoft Graph の <strong>委任されたアクセス許可</strong> のみ（<code>openid</code> / <code>profile</code> / <code>email</code> / <code>User.Read</code>）。アプリケーション許可は不要なため、<strong>Step 5.2 の管理者同意付与に「クラウドアプリケーション管理者」で十分</strong> です（グローバル管理者は不要）。</li>
+<li>もし Step 5.1 で誤って「アプリケーションの許可」を追加した場合は、同意付与に <strong>特権ロール管理者</strong> または <strong>グローバル管理者</strong> が必要になります。委任されたアクセス許可のみを追加してください。</li>
+<li>テナント設定の「ユーザーはアプリケーションを登録できる」が「はい」の場合、Step 2 のアプリ登録作成は一般ユーザーでも実施できます（既定値）。「いいえ」に変更されている環境では「アプリケーション開発者」以上のロールが必須です。</li>
+<li>一人ですべての Step を実施する場合は、上記ロールを必要分すべて割り当てるか、より広い権限を持つ <strong>アプリケーション管理者 + ユーザー管理者</strong> の組み合わせ（または <strong>グローバル管理者</strong>）が簡便です。</li>
+</ul>
+</blockquote>
+
+<h4 id="POPstation-側">POPstation 側</h4>
+
+<ul>
+<li>自テナントの <strong>管理者ロール</strong>（SSO 設定画面 <code>/manage/new/sso-settings</code> へのアクセスに必要）</li>
+</ul>
+
+<h3 id="3.-接続先-url固定値">3. 接続先 URL（固定値）</h3>
+
+<p>POPstation の接続先 URL は全テナント共通の固定値です。</p>
+
+<table>
+<thead><tr>
+<th>項目</th>
+<th>URL</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>POPstation サービス URL</td>
+<td><code>https://popstation.ai/</code></td>
+</tr>
+<tr>
+<td>Auth0 ドメイン（Step 3 のリダイレクト URI で使用）</td>
+<td><code>https://auth.popstation.ai/</code></td>
+</tr>
+</tbody></table>
+
+<hr>
+
+<h2 id="step-1-entra-id-テナントidの確認">Step 1: Entra ID テナントIDの確認</h2>
+
+<blockquote>
+<p><strong>必要権限</strong>: 一般ユーザー（テナント ID は既定で全メンバーが閲覧可能）</p>
+</blockquote>
+
+<ol>
+<li>Azure Portal（https://portal.azure.com）にログイン</li>
+<li>「Microsoft Entra ID」 → 「概要」</li>
+<li><strong>テナントID</strong>（UUID 形式）をコピーして控える</li>
+</ol>
+
+<blockquote>
+<p>後で POPstation 側の「Entra ID テナントID」欄に転記します。</p>
+</blockquote>
+
+<hr>
+
+<h2 id="step-2-アプリ登録の作成">Step 2: アプリ登録の作成</h2>
+
+<blockquote>
+<p><strong>必要権限</strong>: <strong>アプリケーション開発者</strong> 以上（Application Developer / Application Administrator / Cloud Application Administrator / Global Administrator）。テナント設定「ユーザーはアプリケーションを登録できる」が「はい」の既定状態であれば一般ユーザーでも作成可能。</p>
+</blockquote>
+
+<ol>
+<li>「Microsoft Entra ID」 → 「アプリの登録」 → 「+ 新規登録」</li>
+<li>入力:</li>
+</ol>
+
+<table>
+<thead><tr>
+<th>入力欄</th>
+<th>値</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>名前</td>
+<td><code>POPstation SSO</code>（任意）</td>
+</tr>
+<tr>
+<td>サポートされているアカウントの種類</td>
+<td>この組織ディレクトリのみに含まれるアカウント</td>
+</tr>
+<tr>
+<td>リダイレクト URI</td>
+<td>空欄（Step 3 で設定）</td>
+</tr>
+</tbody></table>
+
+<ol>
+<li>「登録」をクリック</li>
+<li>登録完了後の「概要」画面で <strong>アプリケーション (クライアント) ID</strong> をコピーして控える</li>
+</ol>
+
+<figure><img src="images/sso/01-azure-app-overview.png" alt="アプリ登録の概要画面"><figcaption>アプリ登録の概要画面</figcaption></figure>
+
+<blockquote>
+<p>後で POPstation 側の「Client ID」欄に転記します。</p>
+</blockquote>
+
+<hr>
+
+<h2 id="step-3-リダイレクトuriの設定">Step 3: リダイレクトURIの設定</h2>
+
+<blockquote>
+<p><strong>必要権限</strong>: 当該アプリ登録の <strong>所有者</strong>、または <strong>アプリケーション管理者</strong> 以上</p>
+</blockquote>
+
+<ol>
+<li>作成したアプリ登録 → 「認証」 → 「+ プラットフォームを追加」 → 「Web」</li>
+<li><strong>リダイレクト URI</strong> に以下の固定値を入力:</li>
+</ol>
+
+<pre><code>https://auth.popstation.ai/login/callback</code></pre>
+
+<ol>
+<li>「構成」をクリック</li>
+</ol>
+
+<h3 id="チェックボックスについて">チェックボックスについて</h3>
+
+<p>以下は <strong>チェック不要</strong>:</p>
+
+<ul>
+<li>「アクセストークン (暗黙的フローに使用)」</li>
+<li>「ID トークン (暗黙的およびハイブリッドフローに使用)」</li>
+</ul>
+
+<hr>
+
+<h2 id="step-4-client-secret-の発行">Step 4: Client Secret の発行</h2>
+
+<blockquote>
+<p><strong>必要権限</strong>: 当該アプリ登録の <strong>所有者</strong>、または <strong>アプリケーション管理者</strong> 以上</p>
+</blockquote>
+
+<ol>
+<li>アプリ登録 → 「証明書とシークレット」 → 「クライアント シークレット」タブ → 「+ 新しいクライアント シークレット」</li>
+<li>入力:</li>
+</ol>
+
+<table>
+<thead><tr>
+<th>入力欄</th>
+<th>値</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>説明</td>
+<td><code>POPstation SSO</code>（任意）</td>
+</tr>
+<tr>
+<td>有効期限</td>
+<td>社内ポリシー準拠（推奨: 12〜24 か月）</td>
+</tr>
+</tbody></table>
+
+<ol>
+<li>「追加」をクリック</li>
+<li><strong>「値」列のシークレット値をコピーして控える</strong></li>
+</ol>
+
+<figure><img src="images/sso/02-azure-client-secret.png" alt="クライアントシークレット発行画面"><figcaption>クライアントシークレット発行画面</figcaption></figure>
+
+<blockquote>
+<p><strong>重要</strong>:</p>
+
+<ul>
+<li>「値」はこの画面を離れると <strong>二度と表示されません</strong>。必ずこのタイミングでコピーすること</li>
+<li>「シークレットID」ではなく <strong>「値」</strong> を転記対象とする</li>
+<li>有効期限到来前に更新する運用ルールを社内で確立しておくこと</li>
+</ul>
+</blockquote>
+
+<hr>
+
+<h2 id="step-5-apiアクセス許可の設定">Step 5: APIアクセス許可の設定</h2>
+
+<h3 id="5.1-api-権限の追加">5.1 API 権限の追加</h3>
+
+<blockquote>
+<p><strong>必要権限</strong>: 当該アプリ登録の <strong>所有者</strong>、または <strong>アプリケーション管理者</strong> 以上</p>
+</blockquote>
+
+<ol>
+<li>アプリ登録 → 「API のアクセス許可」 → 「+ アクセス許可の追加」</li>
+<li>「Microsoft Graph」 → 「委任されたアクセス許可」</li>
+<li>以下を追加:</li>
+</ol>
+
+<table>
+<thead><tr>
+<th>権限名</th>
+<th>用途</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>openid</code></td>
+<td>OpenID Connect の基本認証</td>
+</tr>
+<tr>
+<td><code>profile</code></td>
+<td>プロファイル情報取得</td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td>メールアドレス取得</td>
+</tr>
+<tr>
+<td><code>User.Read</code></td>
+<td>サインインユーザー自身の基本情報取得</td>
+</tr>
+</tbody></table>
+
+<ol>
+<li>「アクセス許可の追加」をクリック</li>
+</ol>
+
+<figure><img src="images/sso/03-azure-api-permissions.png" alt="API のアクセス許可一覧（4 権限追加後）"><figcaption>API のアクセス許可一覧（4 権限追加後）</figcaption></figure>
+
+<h3 id="5.2-管理者の同意を付与必須">5.2 管理者の同意を付与（必須）</h3>
+
+<blockquote>
+<p><strong>必要権限</strong>: <strong>クラウドアプリケーション管理者</strong>（Cloud Application Administrator）以上。当ガイドで追加した委任されたアクセス許可（<code>openid</code> / <code>profile</code> / <code>email</code> / <code>User.Read</code>）のみであれば、この権限で同意付与が完了します。アプリケーション許可（application permissions）を含む場合は <strong>特権ロール管理者</strong> または <strong>グローバル管理者</strong> が必要になります。</p>
+</blockquote>
+
+<ol>
+<li>「<code>&lt;テナント名&gt;</code> に管理者の同意を与えます」をクリック → 「はい」</li>
+</ol>
+
+<blockquote>
+<p><strong>必須項目</strong>: 同意付与を怠るとログイン時に毎回同意画面が出るか、認証エラーが発生します。上記権限を持つアカウントで実施してください。</p>
+</blockquote>
+
+<hr>
+
+<h2 id="step-6-optional-claims-の設定推奨">Step 6: Optional Claims の設定（推奨）</h2>
+
+<blockquote>
+<p><strong>必要権限</strong>: 当該アプリ登録の <strong>所有者</strong>、または <strong>アプリケーション管理者</strong> 以上</p>
+</blockquote>
+
+<p>ID トークンに <code>email</code> クレームを明示的に含める設定です。実施しなくても動作する場合が多いが、メールアドレスでのユーザー識別を確実化するため推奨。</p>
+
+<ol>
+<li>アプリ登録 → 「トークン構成」 → 「+ オプションの要求を追加」</li>
+<li><strong>トークンの種類</strong>: 「ID」</li>
+<li><strong>要求</strong>: <code>email</code> にチェック</li>
+<li>「追加」</li>
+<li>「Microsoft Graph の <code>email</code> 権限をオンにする」ダイアログが出たら「はい」</li>
+</ol>
+
+<blockquote>
+<p>ユーザーの「メール」属性が空欄だと email クレームも空になります。Entra ID 上で各ユーザーの「メール」属性に実在メールアドレスが入っていることを確認してください。</p>
+</blockquote>
+
+<hr>
+
+<h2 id="step-7-テストユーザーの準備entra-id-側">Step 7: テストユーザーの準備（Entra ID 側）</h2>
+
+<blockquote>
+<p><strong>必要権限</strong>: 新規ユーザー作成は <strong>ユーザー管理者</strong>（User Administrator）以上。既存ユーザーを流用する場合は不要。</p>
+</blockquote>
+
+<p>SSO 動作確認用の Entra ID ユーザーを 1〜2 名用意してください。</p>
+
+<ul>
+<li>既存ユーザーを使う場合: 「メール」属性が設定されているか確認</li>
+<li>新規ユーザーを作る場合: 「メール」欄に実在メールアドレスを入力</li>
+</ul>
+
+<blockquote>
+<p><strong>補足</strong>: ここで用意するのは <strong>認証側（Entra ID）のユーザー</strong> です。POPstation 側のユーザー登録は別途 Step 9 で実施します。両方が揃って初めて SSO ログインが成功します。</p>
+</blockquote>
+
+<hr>
+
+<h2 id="step-8-POPstation-sso設定画面への転記有効化">Step 8: POPstation SSO設定画面への転記・有効化</h2>
+
+<h3 id="8.1-sso-設定画面へアクセス">8.1 SSO 設定画面へアクセス</h3>
+
+<p>POPstation に管理者アカウントでログインし、以下のメニューを開く:</p>
+
+<pre><code>管理画面 → SSO設定</code></pre>
+
+<p>URL を直接開く場合:</p>
+
+<pre><code>https://POPstation.ai/manage/new/sso-settings</code></pre>
+
+<h3 id="8.2-設定値の転記">8.2 設定値の転記</h3>
+
+<p>「SSO設定を開始」ボタンをクリックし、各 Step で控えた値を入力:</p>
+
+<table>
+<thead><tr>
+<th>POPstation の入力欄</th>
+<th>入力する値（取得元 Step）</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Entra ID テナントID</td>
+<td>Step 1 で控えたテナントID</td>
+</tr>
+<tr>
+<td>Client ID</td>
+<td>Step 2 で控えたアプリケーション (クライアント) ID</td>
+</tr>
+<tr>
+<td>Client Secret</td>
+<td>Step 4 で控えたシークレットの「値」</td>
+</tr>
+<tr>
+<td>メールドメイン</td>
+<td>SSO 対象とするメールアドレスのドメイン（例: <code>example.co.jp</code>）</td>
+</tr>
+</tbody></table>
+
+<h3 id="8.3-保存有効化">8.3 保存・有効化</h3>
+
+<p>「保存」ボタンをクリック。成功すると画面に <strong>SSO ログイン URL</strong> が表示されます:</p>
+
+<pre><code>https://POPstation.ai/signin?sso=&lt;テナントID&gt;</code></pre>
+
+<figure><img src="images/sso/04-POPstation-sso-settings.png" alt="SSO 設定画面（有効化済み）"><figcaption>SSO 設定画面（有効化済み）</figcaption></figure>
+
+<p>この URL がユーザーへの配布対象になります。</p>
+
+<hr>
+
+<h2 id="step-9-POPstation-側でユーザーを事前登録">Step 9: POPstation 側でユーザーを事前登録</h2>
+
+<blockquote>
+<p><strong>必要権限</strong>: POPstation 自テナントの <strong>管理者ロール</strong></p>
+</blockquote>
+
+<p>SSO は認証のみを Entra ID に委ねます。POPstation 側のユーザーレコードは別途必要であり、<strong>未登録ユーザーが SSO ログインしてもアクセス拒否</strong> となります。</p>
+
+<h3 id="9.1-登録対象">9.1 登録対象</h3>
+
+<p>SSO ログインを許可する全社員を POPstation に事前登録してください。Step 7 で用意した動作確認用のテストユーザーも忘れず登録します。</p>
+
+<h3 id="9.2-登録手順">9.2 登録手順</h3>
+
+<ol>
+<li>POPstation に管理者アカウントでログイン</li>
+<li>管理画面 → ユーザー管理</li>
+<li>「+ ユーザー追加」から登録</li>
+</ol>
+
+<figure><img src="images/sso/05-POPstation-user-add.png" alt="ユーザー管理画面"><figcaption>ユーザー管理画面</figcaption></figure>
+
+<ol>
+<li>以下を入力:</li>
+</ol>
+
+<table>
+<thead><tr>
+<th>項目</th>
+<th>値</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>メールアドレス</td>
+<td><strong>Entra ID 側ユーザーの「メール」属性と同一のアドレス</strong></td>
+</tr>
+<tr>
+<td>氏名・権限・所属グループ等</td>
+<td>社内運用に従って設定</td>
+</tr>
+</tbody></table>
+
+<blockquote>
+<p><strong>重要</strong>: メールアドレスが Entra ID 側と POPstation 側で一致していないと SSO ログイン後にユーザーが識別できず、Access Denied になります。<strong>完全一致</strong>（大文字小文字含む）を確認してください。</p>
+</blockquote>
+
+<h3 id="9.3-一括登録">9.3 一括登録</h3>
+
+<p>人数が多い場合は POPstation のユーザー一括取込機能（CSV インポート等）を利用してください。詳細は POPstation 管理画面のヘルプを参照。</p>
+
+<hr>
+
+<h2 id="step-10-ssoログインの動作確認">Step 10: SSOログインの動作確認</h2>
+
+<h3 id="10.1-シークレットウィンドウで-sso-ログイン-url-を開く">10.1 シークレットウィンドウで SSO ログイン URL を開く</h3>
+
+<p>既存セッションの影響を避けるため、ブラウザのシークレットウィンドウ（プライベートブラウジング）で SSO ログイン URL を開きます。</p>
+
+<h3 id="10.2-認証フローの確認">10.2 認証フローの確認</h3>
+
+<ol>
+<li>Microsoft のサインイン画面にリダイレクトされること</li>
+<li>Step 7 で用意したテストユーザー（Entra ID 側）でサインイン</li>
+<li>多要素認証が設定されている場合は画面の指示に従う</li>
+<li>POPstation のチャット画面にリダイレクトされること</li>
+<li>ログイン後、Step 9 で POPstation 側に登録したユーザーとして利用できること</li>
+</ol>
+
+<h3 id="10.3-チェックリスト">10.3 チェックリスト</h3>
+
+<ul>
+<li><input class="task-checkbox" type="checkbox" disabled> SSO ログイン URL → Microsoft サインイン画面の遷移</li>
+<li><input class="task-checkbox" type="checkbox" disabled> テストユーザーでの認証成功</li>
+<li><input class="task-checkbox" type="checkbox" disabled> POPstation へのリダイレクトとセッション確立</li>
+<li><input class="task-checkbox" type="checkbox" disabled> POPstation 側で事前登録したユーザーとしてログインできている</li>
+<li><input class="task-checkbox" type="checkbox" disabled> 2 回目以降のログイン正常動作</li>
+<li><input class="task-checkbox" type="checkbox" disabled> SSO 無効化 → 通常ログインへのフォールバック動作</li>
+</ul>
+
+<hr>
+
+<h2 id="運用上の注意">運用上の注意</h2>
+
+<h3 id="新規社員入社時のユーザー追加">新規社員入社時のユーザー追加</h3>
+
+<p>新しく SSO ログインを利用するユーザーを追加する際は、<strong>必ず以下の両方を実施</strong> してください。</p>
+
+<ol>
+<li><strong>Entra ID 側</strong>: 新規ユーザー作成 + 「メール」属性設定</li>
+<li><strong>POPstation 側</strong>: Step 9 と同じ手順でユーザーを登録（Entra ID と同一メールアドレス）</li>
+</ol>
+
+<p>どちらか一方だけでは SSO ログインは成功しません。</p>
+
+<h3 id="退職者の-sso-ログイン無効化">退職者の SSO ログイン無効化</h3>
+
+<p>退職者の SSO ログインを止める場合は <strong>Entra ID 側でユーザーを無効化</strong> すれば認証段階でブロックされます。加えて、POPstation 側のユーザーレコードも無効化または削除して権限・課金を整理してください。</p>
+
+<h3 id="ユーザーへの-sso-ログイン-url-配布">ユーザーへの SSO ログイン URL 配布</h3>
+
+<p>動作確認完了後、SSO ログイン URL を社員に配布してください。ユーザー向け手順書: <a href="./sso-user-login-guide.html">SSOログイン手順</a></p>
+
+<h3 id="client-secret-の有効期限管理">Client Secret の有効期限管理</h3>
+
+<p>Step 4 で発行した Client Secret には有効期限があります。期限が切れると SSO ログインができなくなるため、以下を運用ルール化してください。</p>
+
+<ul>
+<li>期限の 1〜2 か月前にカレンダー通知</li>
+<li>新しい Client Secret を発行 → SSO 設定画面の「Client Secret」欄を更新 → 保存</li>
+<li>旧 Client Secret は期限切れまで残しておけば切替時のダウンタイムなし</li>
+</ul>
+
+<h3 id="sso-の一時無効化解除">SSO の一時無効化・解除</h3>
+
+<p>SSO 設定画面の「無効化」ボタンで一時無効化できます。</p>
+
+<table>
+<thead><tr>
+<th>状態</th>
+<th>挙動</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>有効</td>
+<td>SSO ログイン URL から Entra ID 経由でログイン可能</td>
+</tr>
+<tr>
+<td>無効</td>
+<td>SSO ログイン URL にアクセスしても通常ログイン画面が表示される</td>
+</tr>
+</tbody></table>
+
+<p>無効化中も設定値は保持されるため、「有効化」ボタンで即座に再開可能。</p>
+
+<hr>
+
+<h2 id="トラブルシューティング">トラブルシューティング</h2>
+
+<h3 id="aadsts50011-the-redirect-uri-specified-in-the-request-does-not-match">「AADSTS50011: The redirect URI specified in the request does not match」</h3>
+
+<p>Step 3 のリダイレクト URI と Auth0 コールバック URL が不一致。Auth0 ドメインの誤字、<code>https://</code> の有無を確認。</p>
+
+<h3 id="aadsts7000215-invalid-client-secret">「AADSTS7000215: Invalid client secret」</h3>
+
+<p>Client Secret が誤りか有効期限切れ。Step 4 を再実施。シークレットの「値」を使っているか（「シークレットID」ではない）も確認。</p>
+
+<h3 id="aadsts65001-ユーザーまたは管理者がアプリケーションに同意していません">「AADSTS65001: ユーザーまたは管理者がアプリケーションに同意していません」</h3>
+
+<p>Step 5.2 の管理者同意が未付与。<strong>クラウドアプリケーション管理者</strong>（以上）で「管理者の同意を与えます」を実施。</p>
+
+<h3 id="aadsts900144-the-request-body-must-contain-the-following-parameter-&#x27;scope&#x27;">「AADSTS900144: The request body must contain the following parameter: &#x27;scope&#x27;」</h3>
+
+<p>Step 5 の <code>openid</code> / <code>profile</code> / <code>email</code> 3 つすべての追加 + 管理者同意付与を確認。</p>
+
+<h3 id="auth0-でdiscovery-url-到達不能">Auth0 で「Discovery URL 到達不能」</h3>
+
+<p>Entra ID テナントID の入力誤り。以下 URL をブラウザで開いて JSON が返るか確認:</p>
+
+<pre><code>https://login.microsoftonline.com/&lt;テナントID&gt;/v2.0/.well-known/openid-configuration</code></pre>
+
+<h3 id="ユーザーが-sso-ログイン後にaccess-deniedになる">ユーザーが SSO ログイン後に「Access Denied」になる</h3>
+
+<p>原因は主に 2 つです。</p>
+
+<ol>
+<li><strong>POPstation 側にユーザーが未登録</strong> — Step 9 の手順で当該ユーザーを POPstation に登録してください。Entra ID と POPstation で <strong>メールアドレスが完全一致</strong>（大文字小文字含む）していることを確認。</li>
+<li><strong>Entra ID 側「メール」属性が空欄</strong> — Azure Portal でユーザー編集 → 「メール」欄に実在メールアドレスを入力。</li>
+</ol>
+
+<h3 id="sso設定画面にアクセスできない">SSO設定画面にアクセスできない</h3>
+
+<p>対象テナントの SSO 機能フラグが有効化されていない可能性。社内のテナント管理者に確認を依頼してください。</p>
+
+<h3 id="その他のエラー">その他のエラー</h3>
+
+<p>エラーコード（<code>AADSTS</code> で始まる番号）とスクリーンショットを POPstation サポート窓口へ。</p>
+    </main>
+  </div>
+</body>
+</html>
